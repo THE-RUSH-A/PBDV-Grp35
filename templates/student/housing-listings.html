@@ -1,0 +1,196 @@
+{% extends "base.html" %} {% block title %}Housing Listings{% endblock %} {%
+block content %}
+
+<div class="listings-container">
+  <div class="listings-header">
+    <h1>Find Your Perfect Home</h1>
+    <p>Browse available student accommodations</p>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="filters-section">
+    <div class="search-bar">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search by title, location, or description..."
+        class="form-control"
+      />
+      <button onclick="searchListings()" class="btn btn-primary">Search</button>
+    </div>
+
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label for="city-filter">City</label>
+
+        <select id="city-filter" class="form-control">
+          <option value="">All Cities</option>
+
+          {% set cities = [] %} {% for listing in listings %} {% if listing.city
+          not in cities %} {% set cities = cities + [listing.city] %}
+          <option value="{{ listing.city }}">{{ listing.city }}</option>
+          {% endif %} {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="price-min">Min Price ($)</label>
+        <input
+          type="number"
+          id="price-min"
+          class="form-control"
+          placeholder="Min"
+          min="0"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="price-max">Max Price ($)</label>
+        <input
+          type="number"
+          id="price-max"
+          class="form-control"
+          placeholder="Max"
+          min="0"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="bedrooms">Bedrooms</label>
+        <select id="bedrooms" class="form-control">
+          <option value="">Any</option>
+          <option value="1">1+</option>
+          <option value="2">2+</option>
+          <option value="3">3+</option>
+          <option value="4">4+</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="sort-by">Sort By</label>
+        <select id="sort-by" class="form-control">
+          <option value="newest">Newest First</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+        </select>
+      </div>
+
+      <button onclick="applyFilters()" class="btn btn-primary">
+        Apply Filters
+      </button>
+
+      <button onclick="resetFilters()" class="btn btn-outline">Reset</button>
+    </div>
+  </div>
+
+  <!-- Listings Grid -->
+  <div class="listings-grid" id="listings-grid">
+    {% if listings %} {% for listing in listings %}
+
+    <div class="listing-card" data-listing-id="{{ listing.id }}">
+      <div class="listing-image">
+        {% if listing.images %}
+        <img
+          src="{{ listing.images.split(',')[0] }}"
+          alt="{{ listing.title }}"
+        />
+        {% else %}
+        <div class="image-placeholder">🏠</div>
+        {% endif %}
+
+        <div
+          class="listing-status {% if listing.is_available %}available{% else %}unavailable{% endif %}"
+        >
+          {% if listing.is_available %} Available {% else %} Unavailable {%
+          endif %}
+        </div>
+      </div>
+
+      <div class="listing-content">
+        <h3 class="listing-title">{{ listing.title }}</h3>
+
+        <div class="listing-price">${{ listing.price }}/month</div>
+
+        <div class="listing-location">
+          <span class="location-icon">📍</span>
+          {{ listing.address }}, {{ listing.city }}
+        </div>
+
+        <div class="listing-details">
+          <span class="detail">
+            <span class="detail-icon">🛏️</span>
+            {{ listing.bedrooms }} bed
+          </span>
+
+          <span class="detail">
+            <span class="detail-icon">🚿</span>
+            {{ listing.bathrooms }} bath
+          </span>
+
+          <span class="detail">
+            <span class="detail-icon">📅</span>
+            Available: {{ listing.available_from.strftime('%b %d, %Y') }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {% endfor %} {% else %}
+
+    <div class="no-listings">
+      <div class="no-listings-icon">🏠</div>
+      <h3>No Listings Found</h3>
+      <p>There are no housing listings available at the moment.</p>
+      <p>Please check back later or adjust your filters.</p>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  function applyFilters() {
+    const city = document.getElementById("city-filter").value;
+    const minPrice =
+      parseFloat(document.getElementById("price-min").value) || 0;
+    const maxPrice =
+      parseFloat(document.getElementById("price-max").value) || Infinity;
+    const bedrooms = document.getElementById("bedrooms").value;
+
+    const listings = document.querySelectorAll(".listing-card");
+
+    listings.forEach((listing) => {
+      let show = true;
+
+      if (city) {
+        const listingCity =
+          listing.querySelector(".listing-location").textContent;
+        if (!listingCity.includes(city)) show = false;
+      }
+
+      const priceText = listing.querySelector(".listing-price").textContent;
+      const price = parseFloat(
+        priceText.replace("$/month", "").replace("$", ""),
+      );
+
+      if (price < minPrice || price > maxPrice) show = false;
+
+      if (bedrooms) {
+        const details = listing.querySelectorAll(".detail");
+        let listingBedrooms = 0;
+
+        details.forEach((d) => {
+          if (d.textContent.includes("bed")) {
+            listingBedrooms = parseInt(d.textContent);
+          }
+        });
+
+        if (listingBedrooms < parseInt(bedrooms)) show = false;
+      }
+
+      listing.style.display = show ? "block" : "none";
+    });
+  }
+</script>
+
+{% endblock %}

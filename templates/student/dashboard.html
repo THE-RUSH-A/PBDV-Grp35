@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Welcome, {{ current_user.first_name }}!</h1>
+    <p>Your student housing dashboard</p>
+</div>
+
+<div class="dashboard-stats">
+    <div class="stat-card">
+        <h3>Pending Match Requests</h3>
+        <div class="stat-number">{{ pending_requests }}</div>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Active Applications</h3>
+        <div class="stat-number">{{ applications|selectattr('status', 'equalto', 'pending')|list|length }}</div>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Notifications</h3>
+        <div class="stat-number">{{ notifications|length }}</div>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Profile Completion</h3>
+        <div class="stat-number">
+            {% set completion = 0 %}
+            {% if current_user.profile.phone %}25{% else %}0{% endif %}
+            + {% if current_user.profile.university %}25{% else %}0{% endif %}
+            + {% if current_user.preferences.sleep_schedule %}25{% else %}0{% endif %}
+            + {% if current_user.preferences.cleanliness %}25{% else %}0{% endif %}
+            = {{ [25,25,25,25]|select|list|length * 25 }}
+            %
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Recent Notifications -->
+    <div class="dashboard-card">
+        <div class="card-header">
+            <h3>Recent Notifications</h3>
+        </div>
+        <div class="card-body">
+            {% if notifications %}
+                {% for notification in notifications %}
+                    <div class="notification-item {% if not notification.is_read %}unread{% endif %}">
+                        <strong>{{ notification.title }}</strong>
+                        <p>{{ notification.message }}</p>
+                        <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No new notifications</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pending Match Requests -->
+    <div class="dashboard-card">
+        <div class="card-header">
+            <h3>Pending Match Requests</h3>
+        </div>
+        <div class="card-body">
+            {% set pending_requests = MatchRequest.query.filter_by(receiver_id=current_user.id, status='pending').all() %}
+            {% if pending_requests %}
+                {% for request in pending_requests %}
+                    <div class="match-request-item">
+                        <div class="request-info">
+                            <strong>{{ request.sender.first_name }} {{ request.sender.last_name }}</strong>
+                            <span class="compatibility-badge compatibility-{{ 'high' if request.compatibility_score > 75 else 'medium' if request.compatibility_score > 50 else 'low' }}">
+                                {{ request.compatibility_score|round|int }}% Match
+                            </span>
+                        </div>
+                        <div class="request-actions">
+                            <button onclick="handleMatchRequest({{ request.id }}, 'approve')" class="btn btn-success btn-sm">Approve</button>
+                            <button onclick="handleMatchRequest({{ request.id }}, 'reject')" class="btn btn-danger btn-sm">Reject</button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No pending match requests</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Recent Applications -->
+    <div class="dashboard-card">
+        <div class="card-header">
+            <h3>Recent Applications</h3>
+        </div>
+        <div class="card-body">
+            {% if applications %}
+                {% for application in applications[:5] %}
+                    <div class="application-item">
+                        <div class="application-info">
+                            <strong>{{ application.listing.title }}</strong>
+                            <span class="status-badge status-{{ application.status }}">
+                                {{ application.status }}
+                            </span>
+                        </div>
+                        <small>Applied: {{ application.applied_at.strftime('%Y-%m-%d') }}</small>
+                    </div>
+                {% endfor %}
+                {% if applications|length > 5 %}
+                    <a href="{{ url_for('my_applications') }}" class="view-all">View all applications</a>
+                {% endif %}
+            {% else %}
+                <p class="text-muted">No applications yet</p>
+                <a href="{{ url_for('housing_listings') }}" class="btn btn-primary">Browse Housing</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="dashboard-card">
+        <div class="card-header">
+            <h3>Quick Actions</h3>
+        </div>
+        <div class="card-body quick-actions">
+            <a href="{{ url_for('roommate_preferences') }}" class="action-item">
+                <span class="action-icon">📝</span>
+                <span>Update Preferences</span>
+            </a>
+            <a href="{{ url_for('roommate_matching') }}" class="action-item">
+                <span class="action-icon">👥</span>
+                <span>Find Roommates</span>
+            </a>
+            <a href="{{ url_for('housing_listings') }}" class="action-item">
+                <span class="action-icon">🏠</span>
+                <span>Browse Housing</span>
+            </a>
+            <a href="{{ url_for('student_profile') }}" class="action-item">
+                <span class="action-icon">👤</span>
+                <span>Edit Profile</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard-header {
+    margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+    font-size: 2rem;
+    color: #333;
+}
+
+.dashboard-header p {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.dashboard-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.card-header {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #495057;
+}
+
+.card-body {
+    padding: 1rem;
+}
+
+.notification-item,
+.match-request-item,
+.application-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+.notification-item:last-child,
+.match-request-item:last-child,
+.application-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item.unread {
+    background-color: #e3f2fd;
+}
+
+.match-request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.request-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.request-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.status-pending {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-approved {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-rejected {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-confirmed {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+.action-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #495057;
+    transition: background-color 0.3s;
+}
+
+.action-item:hover {
+    background: #e9ecef;
+}
+
+.action-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.view-all {
+    display: block;
+    text-align: center;
+    margin-top: 0.5rem;
+    color: #667eea;
+    text-decoration: none;
+}
+
+.view-all:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,293 @@
+{% extends "base.html" %} {% block title %}Student Profile{% endblock %} {%
+block content %}
+<div class="profile-container">
+  <h1>Your Profile</h1>
+
+  <form
+    method="POST"
+    action="{{ url_for('student_profile') }}"
+    id="profile-form"
+    class="profile-form"
+  >
+    <div class="form-section">
+      <h2>Personal Information</h2>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first_name">First Name</label>
+          <input
+            type="text"
+            id="first_name"
+            value="{{ current_user.first_name }}"
+            class="form-control"
+            readonly
+            disabled
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="last_name">Last Name</label>
+          <input
+            type="text"
+            id="last_name"
+            value="{{ current_user.last_name }}"
+            class="form-control"
+            readonly
+            disabled
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input
+          type="email"
+          id="email"
+          value="{{ current_user.email }}"
+          class="form-control"
+          readonly
+          disabled
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input
+          type="tel"
+          id="phone"
+          name="phone"
+          value="{{ profile.phone or '' }}"
+          class="form-control"
+          placeholder="Enter your phone number"
+        />
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Education Details</h2>
+
+      <div class="form-group">
+        <label for="university">University/College</label>
+        <input
+          type="text"
+          id="university"
+          name="university"
+          value="{{ profile.university or '' }}"
+          class="form-control"
+          placeholder="Enter your university name"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="course">Course/Major</label>
+        <input
+          type="text"
+          id="course"
+          name="course"
+          value="{{ profile.course or '' }}"
+          class="form-control"
+          placeholder="Enter your course"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="year_of_study">Year of Study</label>
+        <select id="year_of_study" name="year_of_study" class="form-control">
+          <option value="">Select year</option>
+          {% for year in range(1, 6) %}
+          <option
+            value="{{ year }}"
+            {%
+            if
+            profile.year_of_study=""
+            ="year"
+            %}selected{%
+            endif
+            %}
+          >
+            {{ year }}{% if year == 1 %}st{% elif year == 2 %}nd{% elif year ==
+            3 %}rd{% else %}th{% endif %} Year
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="bio">Bio/About Me</label>
+        <textarea
+          id="bio"
+          name="bio"
+          class="form-control"
+          rows="4"
+          placeholder="Tell potential roommates about yourself..."
+        >
+{{ profile.bio or '' }}</textarea
+        >
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline"
+        >Cancel</a
+      >
+    </div>
+  </form>
+
+  <div class="profile-sidebar">
+    <div class="profile-completion">
+      <h3>Profile Completion</h3>
+      {% set completion = 0 %} {% if profile.phone %}{% set completion =
+      completion + 25 %}{% endif %} {% if profile.university %}{% set completion
+      = completion + 25 %}{% endif %} {% if profile.bio %}{% set completion =
+      completion + 25 %}{% endif %} {% if current_user.preferences and
+      current_user.preferences.sleep_schedule %}{% set completion = completion +
+      25 %}{% endif %}
+
+      <div class="progress">
+        <div class="progress-bar" style="width: {{ completion }}%">
+          {{ completion }}%
+        </div>
+      </div>
+
+      <p class="completion-message">
+        {% if completion < 50 %} Complete your profile to get better roommate
+        matches! {% elif completion < 100 %} Great progress! Fill in all details
+        for 100% completion. {% else %} Excellent! Your profile is complete. {%
+        endif %}
+      </p>
+    </div>
+
+    <div class="quick-tips">
+      <h3>Quick Tips</h3>
+      <ul>
+        <li>Add a profile picture to increase response rate</li>
+        <li>Complete your roommate preferences for better matches</li>
+        <li>Keep your contact information up to date</li>
+        <li>Write a detailed bio to help others know you better</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<style>
+  .profile-container {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  .profile-form {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .form-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .form-section h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+    color: #495057;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .profile-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .profile-completion,
+  .quick-tips {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .profile-completion h3,
+  .quick-tips h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: #495057;
+  }
+
+  .progress {
+    height: 20px;
+    background-color: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background-color: #28a745;
+    color: white;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .completion-message {
+    font-size: 0.9rem;
+    color: #6c757d;
+  }
+
+  .quick-tips ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .quick-tips li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    color: #495057;
+  }
+
+  .quick-tips li:last-child {
+    border-bottom: none;
+  }
+
+  .quick-tips li:before {
+    content: "✓";
+    color: #28a745;
+    margin-right: 0.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .profile-container {
+      grid-template-columns: 1fr;
+    }
+
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
