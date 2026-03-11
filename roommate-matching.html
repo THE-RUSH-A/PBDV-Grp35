@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}Find Roommates{% endblock %}
+
+{% block content %}
+<div class="matching-container">
+    <div class="matching-header">
+        <h1>Find Your Ideal Roommate</h1>
+        <p>Based on your preferences, here are your best matches</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-card">
+        <h3>Filter Matches</h3>
+        <form class="filter-form" id="match-filter-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="min-score">Minimum Compatibility</label>
+                    <input type="range" id="min-score" name="min_score" min="0" max="100" value="50" 
+                           oninput="updateScoreValue(this.value)">
+                    <span id="score-value">50%</span>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sleep-schedule">Sleep Schedule</label>
+                    <select id="sleep-schedule" name="sleep_schedule" class="form-control">
+                        <option value="">Any</option>
+                        <option value="Early bird">Early bird</option>
+                        <option value="Night owl">Night owl</option>
+                        <option value="Flexible">Flexible</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="study-habits">Study Habits</label>
+                    <select id="study-habits" name="study_habits" class="form-control">
+                        <option value="">Any</option>
+                        <option value="Quiet">Quiet</option>
+                        <option value="Moderate">Moderate</option>
+                        <option value="Social">Social</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <button type="reset" class="btn btn-outline">Reset</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Matches Grid -->
+    <div class="matches-grid">
+        {% if matches %}
+            {% for match in matches %}
+                <div class="match-card" data-score="{{ match.score }}">
+                    <div class="match-header">
+                        <div class="match-avatar">
+                            {% if match.user.profile and match.user.profile.profile_picture %}
+                                <img src="{{ match.user.profile.profile_picture }}" alt="{{ match.user.first_name }}">
+                            {% else %}
+                                <div class="avatar-placeholder">
+                                    {{ match.user.first_name[0] }}{{ match.user.last_name[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="match-info">
+                            <h3>{{ match.user.first_name }} {{ match.user.last_name }}</h3>
+                            <p class="match-university">{{ match.user.profile.university or 'University not specified' }}</p>
+                            <p class="match-course">{{ match.user.profile.course or '' }}</p>
+                        </div>
+                        <div class="match-score {% if match.score > 75 %}high{% elif match.score > 50 %}medium{% else %}low{% endif %}">
+                            {{ match.score|round|int }}% Match
+                        </div>
+                    </div>
+                    
+                    <div class="match-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Sleep Schedule:</span>
+                            <span class="detail-value">{{ match.user.preferences.sleep_schedule or 'Not specified' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Study Habits:</span>
+                            <span class="detail-value">{{ match.user.preferences.study_habits or 'Not specified' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Cleanliness:</span>
+                            <span class="detail-value">
+                                {% if match.user.preferences.cleanliness %}
+                                    {{ match.user.preferences.cleanliness }}/5
+                                {% else %}
+                                    Not specified
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Budget Range:</span>
+                            <span class="detail-value">
+                                {% if match.user.preferences.budget_min and match.user.preferences.budget_max %}
+                                    ${{ match.user.preferences.budget_min }} - ${{ match.user.preferences.budget_max }}
+                                {% else %}
+                                    Not specified
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="match-actions">
+                        {% if match.request_status == 'pending' %}
+                            <button class="btn btn-warning" disabled>Request Pending</button>
+                        {% elif match.request_status == 'approved' %}
+                            <button class="btn btn-success" disabled>Matched ✓</button>
+                        {% elif match.request_status == 'rejected' %}
+                            <button class="btn btn-danger" disabled>Request Rejected</button>
+                        {% else %}
+                            <button onclick="sendMatchRequest({{ match.user.id }})" class="btn btn-primary">
+                                Send Match Request
+                            </button>
+                        {% endif %}
+                        
+                        <button class="btn btn-outline" onclick="viewProfile({{ match.user.id }})">
+                            View Full Profile
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-matches">
+                <div class="no-matches-icon">👥</div>
+                <h3>No Matches Found</h3>
+                <p>We couldn't find any compatible roommates based on your preferences.</p>
+                <p>Try updating your preferences or check back later when more students join!</p>
+                <a href="{{ url_for('roommate_preferences') }}" class="btn btn-primary">Update Preferences</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Profile View Modal -->
+<div id="profile-modal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <div id="profile-content">
+            <!-- Profile content will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<style>
+.matching-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.matching-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.matching-header h1 {
+    font-size: 2rem;
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.matching-header p {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+.filters-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.filters-card h3 {
+    margin-bottom: 1rem;
+    color: #495057;
+}
+
+.matches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.match-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.match-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.match-header {
+    display: flex;
+    align-items: center;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    position: relative;
+}
+
+.match-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 1rem;
+    border: 2px solid white;
+}
+
+.match-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.match-info {
+    flex: 1;
+}
+
+.match-info h3 {
+    margin-bottom: 0.25rem;
+    font-size: 1.1rem;
+}
+
+.match-university,
+.match-course {
+    font-size: 0.875rem;
+    opacity: 0.9;
+}
+
+.match-score {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: white;
+}
+
+.match-score.high {
+    color: #28a745;
+}
+
+.match-score.medium {
+    color: #ffc107;
+}
+
+.match-score.low {
+    color: #dc3545;
+}
+
+.match-details {
+    padding: 1.5rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.detail-value {
+    font-weight: 500;
+    color: #495057;
+}
+
+.match-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem 1.5rem;
+}
+
+.match-actions .btn {
+    flex: 1;
+}
+
+.no-matches {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.no-matches-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.no-matches h3 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.no-matches p {
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.no-matches .btn {
+    margin-top: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .matches-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .match-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .match-avatar {
+        margin-right: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .match-actions {
+        flex-direction: column;
+    }
+}
+</style>
+
+<script>
+function updateScoreValue(value) {
+    document.getElementById('score-value').textContent = value + '%';
+}
+
+document.getElementById('match-filter-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const minScore = document.getElementById('min-score').value;
+    const sleepSchedule = document.getElementById('sleep-schedule').value;
+    const studyHabits = document.getElementById('study-habits').value;
+    
+    const matches = document.querySelectorAll('.match-card');
+    
+    matches.forEach(match => {
+        let show = true;
+        
+        // Filter by score
+        const score = parseFloat(match.dataset.score);
+        if (score < minScore) {
+            show = false;
+        }
+        
+        // Filter by sleep schedule
+        if (sleepSchedule) {
+            const scheduleElement = match.querySelector('.detail-item:contains("Sleep Schedule") .detail-value');
+            if (scheduleElement && scheduleElement.textContent.trim() !== sleepSchedule) {
+                show = false;
+            }
+        }
+        
+        // Filter by study habits
+        if (studyHabits) {
+            const habitsElement = match.querySelector('.detail-item:contains("Study Habits") .detail-value');
+            if (habitsElement && habitsElement.textContent.trim() !== studyHabits) {
+                show = false;
+            }
+        }
+        
+        match.style.display = show ? 'block' : 'none';
+    });
+});
+
+document.getElementById('match-filter-form').addEventListener('reset', function(e) {
+    document.getElementById('min-score').value = 50;
+    document.getElementById('score-value').textContent = '50%';
+    document.getElementById('sleep-schedule').value = '';
+    document.getElementById('study-habits').value = '';
+    
+    document.querySelectorAll('.match-card').forEach(match => {
+        match.style.display = 'block';
+    });
+});
+
+function viewProfile(userId) {
+    // In a real app, you would fetch and display the user's full profile
+    // For now, we'll just show a placeholder
+    const modal = document.getElementById('profile-modal');
+    const profileContent = document.getElementById('profile-content');
+    
+    profileContent.innerHTML = `
+        <h2>Profile Details</h2>
+        <p>User profile information would be displayed here.</p>
+        <p>This would include complete profile details, preferences, and more.</p>
+    `;
+    
+    modal.style.display = 'block';
+}
+
+// Contains text selector for filtering
+jQuery.expr[':'].contains = function(a, i, m) {
+    return jQuery(a).text().toUpperCase().indexOf(m[3].toUpperCase()) >= 0;
+};
+</script>
+{% endblock %}
