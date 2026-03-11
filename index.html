@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Student Housing & Roommate Matching{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <h1>Welcome to Student Housing & Roommate Matching</h1>
+    <p class="lead">Find your perfect roommate and accommodation with ease</p>
+    
+    {% if not current_user.is_authenticated %}
+    <div class="cta-buttons">
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Get Started</a>
+        <a href="{{ url_for('login') }}" class="btn btn-outline btn-lg">Login</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="features-grid">
+    <div class="feature-card">
+        <h3>🎯 Smart Matching</h3>
+        <p>Our algorithm finds compatible roommates based on your preferences and lifestyle</p>
+    </div>
+    
+    <div class="feature-card">
+        <h3>🏠 Housing Listings</h3>
+        <p>Browse verified student accommodations with detailed information</p>
+    </div>
+    
+    <div class="feature-card">
+        <h3>📱 Easy Management</h3>
+        <p>Track applications, agreements, and communications in one place</p>
+    </div>
+    
+    <div class="feature-card">
+        <h3>🔒 Secure & Private</h3>
+        <p>Your data is protected with industry-standard security measures</p>
+    </div>
+</div>
+
+<div class="how-it-works">
+    <h2>How It Works</h2>
+    
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">1</div>
+            <h4>Create Profile</h4>
+            <p>Register and complete your profile with your preferences</p>
+        </div>
+        
+        <div class="step">
+            <div class="step-number">2</div>
+            <h4>Find Matches</h4>
+            <p>Browse compatible roommates and send match requests</p>
+        </div>
+        
+        <div class="step">
+            <div class="step-number">3</div>
+            <h4>Browse Housing</h4>
+            <p>Explore available accommodations that fit your budget</p>
+        </div>
+        
+        <div class="step">
+            <div class="step-number">4</div>
+            <h4>Apply & Confirm</h4>
+            <p>Apply for housing and confirm your agreement</p>
+        </div>
+    </div>
+</div>
+
+<div class="testimonials">
+    <h2>What Students Say</h2>
+    
+    <div class="testimonial-grid">
+        <div class="testimonial-card">
+            <p>"Found my ideal roommate within a week! The matching algorithm really works."</p>
+            <cite>- Sarah, University Student</cite>
+        </div>
+        
+        <div class="testimonial-card">
+            <p>"The housing listings are detailed and accurate. Made my international move so much easier."</p>
+            <cite>- Michael, Exchange Student</cite>
+        </div>
+        
+        <div class="testimonial-card">
+            <p>"Great platform for both finding roommates and managing housing applications."</p>
+            <cite>- Emily, Graduate Student</cite>
+        </div>
+    </div>
+</div>
+
+<style>
+.hero-section {
+    text-align: center;
+    padding: 4rem 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    margin-bottom: 3rem;
+}
+
+.hero-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.lead {
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
+    opacity: 0.95;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.btn-lg {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.feature-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.feature-card h3 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.how-it-works {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.step {
+    position: relative;
+}
+
+.step-number {
+    width: 50px;
+    height: 50px;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 1rem;
+}
+
+.testimonials {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.testimonial-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.testimonial-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-style: italic;
+}
+
+.testimonial-card cite {
+    display: block;
+    margin-top: 1rem;
+    font-style: normal;
+    color: #666;
+}
+
+@media (max-width: 768px) {
+    .hero-section h1 {
+        font-size: 2rem;
+    }
+    
+    .cta-buttons {
+        flex-direction: column;
+    }
+    
+    .steps {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
