@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Roommate Preferences{% endblock %}
+
+{% block content %}
+<div class="preferences-container">
+    <h1>Roommate Preferences</h1>
+    <p class="lead">Tell us about your ideal roommate to get better matches</p>
+    
+    <form method="POST" action="{{ url_for('roommate_preferences') }}" id="preferences-form" class="preferences-form">
+        <div class="form-section">
+            <h2>Basic Preferences</h2>
+            
+            <div class="form-group">
+                <label for="preferred_gender">Preferred Gender</label>
+                <select id="preferred_gender" name="preferred_gender" class="form-control">
+                    <option value="">No preference</option>
+                    <option value="Male" {% if preferences.preferred_gender == 'Male' %}selected{% endif %}>Male</option>
+                    <option value="Female" {% if preferences.preferred_gender == 'Female' %}selected{% endif %}>Female</option>
+                    <option value="Other" {% if preferences.preferred_gender == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="sleep_schedule">Sleep Schedule</label>
+                <select id="sleep_schedule" name="sleep_schedule" class="form-control" required>
+                    <option value="">Select schedule</option>
+                    <option value="Early bird" {% if preferences.sleep_schedule == 'Early bird' %}selected{% endif %}>Early bird (Bed by 10 PM)</option>
+                    <option value="Night owl" {% if preferences.sleep_schedule == 'Night owl' %}selected{% endif %}>Night owl (Bed after 2 AM)</option>
+                    <option value="Flexible" {% if preferences.sleep_schedule == 'Flexible' %}selected{% endif %}>Flexible</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="study_habits">Study Habits</label>
+                <select id="study_habits" name="study_habits" class="form-control" required>
+                    <option value="">Select study habits</option>
+                    <option value="Quiet" {% if preferences.study_habits == 'Quiet' %}selected{% endif %}>Quiet - Need silence to study</option>
+                    <option value="Moderate" {% if preferences.study_habits == 'Moderate' %}selected{% endif %}>Moderate - Can study with some noise</option>
+                    <option value="Social" {% if preferences.study_habits == 'Social' %}selected{% endif %}>Social - Prefer group study</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="cleanliness">Cleanliness (1-5)</label>
+                <div class="range-input">
+                    <input type="range" id="cleanliness" name="cleanliness" min="1" max="5" step="1" 
+                           value="{{ preferences.cleanliness or 3 }}" oninput="updateRangeValue(this.value, 'cleanliness-value')">
+                    <span id="cleanliness-value" class="range-value">{{ preferences.cleanliness or 3 }}</span>
+                </div>
+                <small class="form-text">1 = Very messy, 5 = Extremely tidy</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="guest_policy">Guest Policy</label>
+                <select id="guest_policy" name="guest_policy" class="form-control" required>
+                    <option value="">Select policy</option>
+                    <option value="Never" {% if preferences.guest_policy == 'Never' %}selected{% endif %}>Never - No guests allowed</option>
+                    <option value="Occasionally" {% if preferences.guest_policy == 'Occasionally' %}selected{% endif %}>Occasionally - Limited guests</option>
+                    <option value="Frequently" {% if preferences.guest_policy == 'Frequently' %}selected{% endif %}>Frequently - Guests often welcome</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h2>Lifestyle Preferences</h2>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="smoking" {% if preferences.smoking %}checked{% endif %}>
+                    <span>I smoke</span>
+                </label>
+                
+                <label class="checkbox-label">
+                    <input type="checkbox" name="drinking" {% if preferences.drinking %}checked{% endif %}>
+                    <span>I drink alcohol</span>
+                </label>
+                
+                <label class="checkbox-label">
+                    <input type="checkbox" name="pets" {% if preferences.pets %}checked{% endif %}>
+                    <span>I have/want pets</span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h2>Budget & Location</h2>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="budget_min">Minimum Budget ($)</label>
+                    <input type="number" id="budget_min" name="budget_min" value="{{ preferences.budget_min or '' }}" 
+                           class="form-control" min="0" step="50" placeholder="e.g., 500">
+                </div>
+                
+                <div class="form-group">
+                    <label for="budget_max">Maximum Budget ($)</label>
+                    <input type="number" id="budget_max" name="budget_max" value="{{ preferences.budget_max or '' }}" 
+                           class="form-control" min="0" step="50" placeholder="e.g., 1000">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="preferred_areas">Preferred Areas</label>
+                <input type="text" id="preferred_areas" name="preferred_areas" value="{{ preferences.preferred_areas or '' }}" 
+                       class="form-control" placeholder="e.g., Downtown, University area, Northside (comma separated)">
+                <small class="form-text">Separate multiple areas with commas</small>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h2>Additional Information</h2>
+            
+            <div class="form-group">
+                <label for="additional_notes">Additional Notes</label>
+                <textarea id="additional_notes" name="additional_notes" class="form-control" rows="4" 
+                          placeholder="Anything else you'd like potential roommates to know?">{{ preferences.additional_notes or '' }}</textarea>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Preferences</button>
+            <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.preferences-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.preferences-container h1 {
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.lead {
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.preferences-form {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #eee;
+}
+
+.form-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.form-section h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+    color: #495057;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.range-input {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.range-input input[type="range"] {
+    flex: 1;
+}
+
+.range-value {
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.5rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+function updateRangeValue(value, elementId) {
+    document.getElementById(elementId).textContent = value;
+}
+</script>
+{% endblock %}
