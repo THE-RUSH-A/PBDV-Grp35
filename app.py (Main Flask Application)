@@ -1,0 +1,668 @@
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+from datetime import datetime, date
+import sqlite3
+import os
+import json
+from models import db, User, StudentProfile, RoommatePreference, MatchRequest, HousingListing, HousingApplication, Agreement, Notification
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///student_housing.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            flash('You need admin privileges to access this page.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Initialize database
+@app.cli.command("init-db")
+def init_db():
+    db.create_all()
+    # Create admin user if not exists
+    admin = User.query.filter_by(email='admin@housing.com').first()
+    if not admin:
+        admin = User(
+            email='admin@housing.com',
+            first_name='Admin',
+            last_name='User',
+            role='admin'
+        )
+        admin.set_password('admin123')
+        db.session.add(admin)
+        db.session.commit()
+    print("Database initialized!")
+
+# Routes
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if user and user.check_password(password):
+            login_user(user)
+            flash('Logged in successfully!', 'success')
+            
+            if user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('student_dashboard'))
+        else:
+            flash('Invalid email or password', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+        
+        # Validation
+        if password != confirm_password:
+            flash('Passwords do not match', 'danger')
+            return redirect(url_for('register'))
+        
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            flash('Email already registered', 'danger')
+            return redirect(url_for('register'))
+        
+        # Create new user
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            role='student'
+        )
+        user.set_password(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        # Create empty profile and preferences
+        profile = StudentProfile(user_id=user.id)
+        preferences = RoommatePreference(user_id=user.id)
+        
+        db.session.add(profile)
+        db.session.add(preferences)
+        db.session.commit()
+        
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('index'))
+
+# Student Routes
+@app.route('/student/dashboard')
+@login_required
+def student_dashboard():
+    if current_user.role != 'student':
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get recent notifications
+    notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False).order_by(Notification.created_at.desc()).limit(5).all()
+    
+    # Get match requests
+    pending_requests = MatchRequest.query.filter_by(receiver_id=current_user.id, status='pending').count()
+    
+    # Get application status
+    applications = HousingApplication.query.filter_by(student_id=current_user.id).all()
+    
+    return render_template('student/dashboard.html', 
+                         notifications=notifications,
+                         pending_requests=pending_requests,
+                         applications=applications)
+
+@app.route('/student/profile', methods=['GET', 'POST'])
+@login_required
+def student_profile():
+    if request.method == 'POST':
+        profile = current_user.profile
+        profile.phone = request.form.get('phone')
+        profile.university = request.form.get('university')
+        profile.course = request.form.get('course')
+        profile.year_of_study = request.form.get('year_of_study')
+        profile.bio = request.form.get('bio')
+        
+        db.session.commit()
+        flash('Profile updated successfully!', 'success')
+        return redirect(url_for('student_profile'))
+    
+    return render_template('student/profile.html', profile=current_user.profile)
+
+@app.route('/student/preferences', methods=['GET', 'POST'])
+@login_required
+def roommate_preferences():
+    if request.method == 'POST':
+        prefs = current_user.preferences
+        prefs.preferred_gender = request.form.get('preferred_gender')
+        prefs.sleep_schedule = request.form.get('sleep_schedule')
+        prefs.study_habits = request.form.get('study_habits')
+        prefs.cleanliness = request.form.get('cleanliness')
+        prefs.guest_policy = request.form.get('guest_policy')
+        prefs.smoking = 'smoking' in request.form
+        prefs.drinking = 'drinking' in request.form
+        prefs.pets = 'pets' in request.form
+        prefs.budget_min = request.form.get('budget_min')
+        prefs.budget_max = request.form.get('budget_max')
+        prefs.preferred_areas = request.form.get('preferred_areas')
+        prefs.additional_notes = request.form.get('additional_notes')
+        
+        db.session.commit()
+        flash('Preferences saved successfully!', 'success')
+        return redirect(url_for('roommate_preferences'))
+    
+    return render_template('student/roommate-preferences.html', preferences=current_user.preferences)
+
+@app.route('/student/matching')
+@login_required
+def roommate_matching():
+    # Get all other students
+    other_students = User.query.filter(User.id != current_user.id, User.role == 'student').all()
+    
+    # Calculate compatibility scores
+    matches = []
+    current_prefs = current_user.preferences
+    
+    for student in other_students:
+        if student.preferences:
+            score = calculate_compatibility(current_prefs, student.preferences)
+            if score > 50:  # Only show matches with >50% compatibility
+                # Check if match request exists
+                existing_request = MatchRequest.query.filter(
+                    ((MatchRequest.sender_id == current_user.id) & (MatchRequest.receiver_id == student.id)) |
+                    ((MatchRequest.sender_id == student.id) & (MatchRequest.receiver_id == current_user.id))
+                ).first()
+                
+                matches.append({
+                    'user': student,
+                    'score': score,
+                    'request_status': existing_request.status if existing_request else None,
+                    'request_id': existing_request.id if existing_request else None
+                })
+    
+    # Sort by score descending
+    matches.sort(key=lambda x: x['score'], reverse=True)
+    
+    return render_template('student/roommate-matching.html', matches=matches)
+
+def calculate_compatibility(prefs1, prefs2):
+    """Calculate compatibility score between two users"""
+    score = 0
+    total_weight = 0
+    
+    # Gender preference (if specified)
+    if prefs1.preferred_gender and prefs2.preferred_gender:
+        if prefs1.preferred_gender == prefs2.preferred_gender or prefs1.preferred_gender == 'Any' or prefs2.preferred_gender == 'Any':
+            score += 10
+        total_weight += 10
+    
+    # Sleep schedule
+    if prefs1.sleep_schedule and prefs2.sleep_schedule:
+        if prefs1.sleep_schedule == prefs2.sleep_schedule:
+            score += 15
+        total_weight += 15
+    
+    # Study habits
+    if prefs1.study_habits and prefs2.study_habits:
+        if prefs1.study_habits == prefs2.study_habits:
+            score += 15
+        total_weight += 15
+    
+    # Cleanliness (within 2 points)
+    if prefs1.cleanliness and prefs2.cleanliness:
+        if abs(prefs1.cleanliness - prefs2.cleanliness) <= 2:
+            score += 10
+        total_weight += 10
+    
+    # Guest policy
+    if prefs1.guest_policy and prefs2.guest_policy:
+        if prefs1.guest_policy == prefs2.guest_policy:
+            score += 10
+        total_weight += 10
+    
+    # Lifestyle factors
+    lifestyle_factors = ['smoking', 'drinking', 'pets']
+    for factor in lifestyle_factors:
+        val1 = getattr(prefs1, factor)
+        val2 = getattr(prefs2, factor)
+        if val1 == val2:
+            score += 10
+        total_weight += 10
+    
+    # Budget overlap
+    if prefs1.budget_min and prefs1.budget_max and prefs2.budget_min and prefs2.budget_max:
+        if (prefs1.budget_min <= prefs2.budget_max and prefs2.budget_min <= prefs1.budget_max):
+            score += 10
+        total_weight += 10
+    
+    return (score / total_weight * 100) if total_weight > 0 else 0
+
+@app.route('/student/send-match-request/<int:receiver_id>', methods=['POST'])
+@login_required
+def send_match_request(receiver_id):
+    receiver = User.query.get_or_404(receiver_id)
+    
+    # Check if request already exists
+    existing = MatchRequest.query.filter(
+        ((MatchRequest.sender_id == current_user.id) & (MatchRequest.receiver_id == receiver_id)) |
+        ((MatchRequest.sender_id == receiver_id) & (MatchRequest.receiver_id == current_user.id))
+    ).first()
+    
+    if existing:
+        flash('A match request already exists with this user', 'warning')
+    else:
+        # Calculate compatibility
+        score = calculate_compatibility(current_user.preferences, receiver.preferences)
+        
+        # Create request
+        request = MatchRequest(
+            sender_id=current_user.id,
+            receiver_id=receiver_id,
+            compatibility_score=score
+        )
+        db.session.add(request)
+        
+        # Create notification
+        notification = Notification(
+            user_id=receiver_id,
+            type='match_request',
+            title='New Match Request',
+            message=f'{current_user.first_name} {current_user.last_name} sent you a match request',
+            related_id=request.id
+        )
+        db.session.add(notification)
+        db.session.commit()
+        
+        flash('Match request sent successfully!', 'success')
+    
+    return redirect(url_for('roommate_matching'))
+
+@app.route('/student/handle-match-request/<int:request_id>/<string:action>', methods=['POST'])
+@login_required
+def handle_match_request(request_id, action):
+    match_request = MatchRequest.query.get_or_404(request_id)
+    
+    if action == 'approve':
+        match_request.status = 'approved'
+        # Create notification for sender
+        notification = Notification(
+            user_id=match_request.sender_id,
+            type='match_approved',
+            title='Match Request Approved',
+            message=f'{current_user.first_name} {current_user.last_name} approved your match request',
+            related_id=match_request.id
+        )
+        db.session.add(notification)
+        flash('Match request approved!', 'success')
+    elif action == 'reject':
+        match_request.status = 'rejected'
+        flash('Match request rejected', 'info')
+    
+    db.session.commit()
+    return redirect(url_for('student_dashboard'))
+
+@app.route('/student/housing')
+@login_required
+def housing_listings():
+    # Get filter parameters
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    bedrooms = request.args.get('bedrooms', type=int)
+    city = request.args.get('city')
+    
+    query = HousingListing.query.filter_by(is_available=True)
+    
+    if min_price:
+        query = query.filter(HousingListing.price >= min_price)
+    if max_price:
+        query = query.filter(HousingListing.price <= max_price)
+    if bedrooms:
+        query = query.filter(HousingListing.bedrooms >= bedrooms)
+    if city:
+        query = query.filter(HousingListing.city.ilike(f'%{city}%'))
+    
+    listings = query.all()
+    return render_template('student/housing-listings.html', listings=listings)
+
+@app.route('/student/housing/<int:listing_id>')
+@login_required
+def listing_detail(listing_id):
+    listing = HousingListing.query.get_or_404(listing_id)
+    return render_template('student/listing-detail.html', listing=listing)
+
+@app.route('/student/apply/<int:listing_id>', methods=['POST'])
+@login_required
+def apply_housing(listing_id):
+    listing = HousingListing.query.get_or_404(listing_id)
+    
+    # Check if already applied
+    existing = HousingApplication.query.filter_by(
+        listing_id=listing_id,
+        student_id=current_user.id
+    ).first()
+    
+    if existing:
+        flash('You have already applied for this listing', 'warning')
+    else:
+        application = HousingApplication(
+            listing_id=listing_id,
+            student_id=current_user.id,
+            message=request.form.get('message', '')
+        )
+        db.session.add(application)
+        db.session.commit()
+        
+        # Notify admin (simplified - in real app would notify all admins)
+        admins = User.query.filter_by(role='admin').all()
+        for admin in admins:
+            notification = Notification(
+                user_id=admin.id,
+                type='new_application',
+                title='New Housing Application',
+                message=f'{current_user.first_name} {current_user.last_name} applied for {listing.title}',
+                related_id=application.id
+            )
+            db.session.add(notification)
+        db.session.commit()
+        
+        flash('Application submitted successfully!', 'success')
+    
+    return redirect(url_for('housing_listings'))
+
+@app.route('/student/applications')
+@login_required
+def my_applications():
+    applications = HousingApplication.query.filter_by(student_id=current_user.id).all()
+    return render_template('student/applications.html', applications=applications)
+
+@app.route('/student/agreements')
+@login_required
+def my_agreements():
+    agreements = Agreement.query.filter_by(student_id=current_user.id).all()
+    return render_template('student/agreements.html', agreements=agreements)
+
+@app.route('/student/agreement/<int:agreement_id>/<string:action>', methods=['POST'])
+@login_required
+def handle_agreement(agreement_id, action):
+    agreement = Agreement.query.get_or_404(agreement_id)
+    
+    if agreement.student_id != current_user.id:
+        flash('Unauthorized access', 'danger')
+        return redirect(url_for('my_agreements'))
+    
+    if action == 'accept':
+        agreement.status = 'accepted'
+        agreement.signed_at = datetime.utcnow()
+        
+        # Update application status
+        agreement.application.status = 'confirmed'
+        
+        flash('Agreement accepted! Room allocation confirmed.', 'success')
+    elif action == 'reject':
+        agreement.status = 'rejected'
+        flash('Agreement rejected', 'info')
+    
+    db.session.commit()
+    return redirect(url_for('my_agreements'))
+
+# Admin Routes
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    # Statistics
+    total_students = User.query.filter_by(role='student').count()
+    total_listings = HousingListing.query.count()
+    pending_applications = HousingApplication.query.filter_by(status='pending').count()
+    active_agreements = Agreement.query.filter_by(status='accepted').count()
+    
+    # Recent activity
+    recent_users = User.query.filter_by(role='student').order_by(User.created_at.desc()).limit(5).all()
+    recent_applications = HousingApplication.query.order_by(HousingApplication.applied_at.desc()).limit(5).all()
+    
+    return render_template('admin/dashboard.html',
+                         total_students=total_students,
+                         total_listings=total_listings,
+                         pending_applications=pending_applications,
+                         active_agreements=active_agreements,
+                         recent_users=recent_users,
+                         recent_applications=recent_applications)
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def manage_users():
+    users = User.query.filter_by(role='student').all()
+    return render_template('admin/user-management.html', users=users)
+
+@app.route('/admin/user/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@admin_required
+def reset_user_password(user_id):
+    user = User.query.get_or_404(user_id)
+    # Generate temporary password
+    temp_password = 'Temp@123'  # In production, generate random password
+    user.set_password(temp_password)
+    db.session.commit()
+    
+    flash(f'Password reset for {user.email}. Temporary password: {temp_password}', 'success')
+    return redirect(url_for('manage_users'))
+
+@app.route('/admin/matches')
+@login_required
+@admin_required
+def view_matches():
+    confirmed_matches = MatchRequest.query.filter_by(status='approved').all()
+    return render_template('admin/matches.html', matches=confirmed_matches)
+
+@app.route('/admin/housing')
+@login_required
+@admin_required
+def manage_housing():
+    listings = HousingListing.query.all()
+    return render_template('admin/housing-management.html', listings=listings)
+
+@app.route('/admin/housing/add', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_housing():
+    if request.method == 'POST':
+        listing = HousingListing(
+            title=request.form.get('title'),
+            description=request.form.get('description'),
+            address=request.form.get('address'),
+            city=request.form.get('city'),
+            price=request.form.get('price'),
+            bedrooms=request.form.get('bedrooms'),
+            bathrooms=request.form.get('bathrooms'),
+            available_from=datetime.strptime(request.form.get('available_from'), '%Y-%m-%d'),
+            available_until=datetime.strptime(request.form.get('available_until'), '%Y-%m-%d'),
+            amenities=request.form.get('amenities'),
+            landlord_name=request.form.get('landlord_name'),
+            landlord_contact=request.form.get('landlord_contact'),
+            created_by=current_user.id
+        )
+        db.session.add(listing)
+        db.session.commit()
+        flash('Housing listing added successfully!', 'success')
+        return redirect(url_for('manage_housing'))
+    
+    return render_template('admin/add-housing.html')
+
+@app.route('/admin/housing/edit/<int:listing_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_housing(listing_id):
+    listing = HousingListing.query.get_or_404(listing_id)
+    
+    if request.method == 'POST':
+        listing.title = request.form.get('title')
+        listing.description = request.form.get('description')
+        listing.address = request.form.get('address')
+        listing.city = request.form.get('city')
+        listing.price = request.form.get('price')
+        listing.bedrooms = request.form.get('bedrooms')
+        listing.bathrooms = request.form.get('bathrooms')
+        listing.available_from = datetime.strptime(request.form.get('available_from'), '%Y-%m-%d')
+        listing.available_until = datetime.strptime(request.form.get('available_until'), '%Y-%m-%d')
+        listing.is_available = 'is_available' in request.form
+        listing.amenities = request.form.get('amenities')
+        listing.landlord_name = request.form.get('landlord_name')
+        listing.landlord_contact = request.form.get('landlord_contact')
+        
+        db.session.commit()
+        flash('Housing listing updated successfully!', 'success')
+        return redirect(url_for('manage_housing'))
+    
+    return render_template('admin/edit-housing.html', listing=listing)
+
+@app.route('/admin/housing/delete/<int:listing_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_housing(listing_id):
+    listing = HousingListing.query.get_or_404(listing_id)
+    db.session.delete(listing)
+    db.session.commit()
+    flash('Housing listing deleted successfully!', 'success')
+    return redirect(url_for('manage_housing'))
+
+@app.route('/admin/applications')
+@login_required
+@admin_required
+def review_applications():
+    applications = HousingApplication.query.filter_by(status='pending').all()
+    return render_template('admin/applications-review.html', applications=applications)
+
+@app.route('/admin/application/<int:application_id>/<string:action>', methods=['POST'])
+@login_required
+@admin_required
+def handle_application(application_id, action):
+    application = HousingApplication.query.get_or_404(application_id)
+    
+    if action == 'approve':
+        application.status = 'approved'
+        
+        # Create agreement
+        agreement = Agreement(
+            application_id=application.id,
+            student_id=application.student_id,
+            content=f"""STUDENT HOUSING AGREEMENT
+
+This agreement is made between {application.listing.landlord_name} (Landlord) and {application.applicant.first_name} {application.applicant.last_name} (Student).
+
+Property Details:
+- Address: {application.listing.address}
+- Monthly Rent: ${application.listing.price}
+- Available From: {application.listing.available_from.strftime('%Y-%m-%d')}
+- Available Until: {application.listing.available_until.strftime('%Y-%m-%d')}
+
+Terms and Conditions:
+1. The Student agrees to pay rent on the first of each month
+2. A security deposit of one month's rent is required
+3. The Student is responsible for utilities unless stated otherwise
+4. No subletting without written consent
+5. The property must be kept in good condition
+6. Notice period for moving out is 30 days
+
+Please review and accept or reject this agreement.""",
+            status='pending'
+        )
+        db.session.add(agreement)
+        
+        # Notify student
+        notification = Notification(
+            user_id=application.student_id,
+            type='application_approved',
+            title='Application Approved',
+            message=f'Your application for {application.listing.title} has been approved. Please review the agreement.',
+            related_id=agreement.id
+        )
+        db.session.add(notification)
+        
+        flash('Application approved! Agreement created.', 'success')
+        
+    elif action == 'reject':
+        application.status = 'rejected'
+        notification = Notification(
+            user_id=application.student_id,
+            type='application_rejected',
+            title='Application Rejected',
+            message=f'Your application for {application.listing.title} has been rejected.',
+            related_id=application.id
+        )
+        db.session.add(notification)
+        flash('Application rejected', 'info')
+    
+    db.session.commit()
+    return redirect(url_for('review_applications'))
+
+# API Routes for real-time updates
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
+        .order_by(Notification.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': n.id,
+        'title': n.title,
+        'message': n.message,
+        'type': n.type,
+        'created_at': n.created_at.strftime('%Y-%m-%d %H:%M')
+    } for n in notifications])
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    notification = Notification.query.get_or_404(notification_id)
+    if notification.user_id == current_user.id:
+        notification.is_read = True
+        db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/housing/availability')
+def check_availability():
+    listing_id = request.args.get('listing_id')
+    listing = HousingListing.query.get_or_404(listing_id)
+    return jsonify({
+        'is_available': listing.is_available,
+        'available_from': listing.available_from.strftime('%Y-%m-%d') if listing.available_from else None
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True)
