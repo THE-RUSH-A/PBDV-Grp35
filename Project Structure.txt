@@ -1,0 +1,29 @@
+student-housing-app/
+├── app.py
+├── models.py
+├── requirements.txt
+├── static/
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       └── main.js
+└── templates/
+    ├── base.html
+    ├── index.html
+    ├── login.html
+    ├── register.html
+    ├── student/
+    │   ├── dashboard.html
+    │   ├── profile.html
+    │   ├── roommate-preferences.html
+    │   ├── roommate-matching.html
+    │   ├── housing-listings.html
+    │   ├── applications.html
+    │   └── agreements.html
+    └── admin/
+        ├── dashboard.html
+        ├── user-management.html
+        ├── housing-management.html
+        └── applications-review.html
+
+        
